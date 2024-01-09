@@ -55,14 +55,27 @@ private:
 	QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device);
 	
 	void createSwapChain();
+	void recreateSwapChain();
+	void cleanupSwapChain();
 	SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice device);
 	VkSurfaceFormatKHR chooseSwapChainFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats);
 	VkPresentModeKHR chooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes);
 	VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities);
 
 	void createImageViews();
+	void createRenderPass();
 
 	void createGraphicsPipeline();
+	void createFramebuffers();
+	
+	void createCommandPool();
+	void createCommandBuffers();
+	void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+
+	void drawFrame();
+	//synchronization
+	void createSyncObjects();
+
 	VkShaderModule createShaderModule(const std::vector<char>& bytecode);
 
 
@@ -71,6 +84,8 @@ private:
 	//very enthusiastic ones
 	bool CheckWindowExtensionsMatchVulkanExtensions(const std::vector<const char*> glfwExts, const std::vector<VkExtensionProperties>& vulkanExts);
 	
+	static void framebufferResizeCallback(GLFWwindow* window, int width, int height);
+
 	static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
 		VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
 		VkDebugUtilsMessageTypeFlagsEXT messageType,
@@ -119,9 +134,26 @@ private:
 	
 	VkQueue m_graphicsQueue, m_presentQueue;
 
+	VkPipelineLayout m_pipelineLayout;
+	VkRenderPass m_renderPass;
+	VkPipeline m_graphicsPipeline;
+	std::vector<VkFramebuffer> m_swapChainFramebuffers;
+
+	VkCommandPool m_commandPool;
+	std::vector<VkCommandBuffer> m_commandBuffers;
+
+	//synchronization
+	std::vector<VkSemaphore> m_imageAvailableSemaphores;
+	std::vector<VkSemaphore> m_renderFinishedSemaphores;
+	std::vector<VkFence> m_inFlightFences;
+
+	bool m_framebufferResized = false;
+
 	VkSwapchainKHR m_swapChain;
 	VkFormat m_swapChainImageFormat;
 	VkExtent2D m_swapChainExtent;
 	std::vector<VkImage> m_swapChainImages;
 	std::vector<VkImageView> m_swapChainImageViews;
+	const int MAX_FRAMES_IN_FLIGHT = 2;
+	uint32_t m_currentFrame = 0;
 };
