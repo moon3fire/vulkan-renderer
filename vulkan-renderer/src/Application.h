@@ -3,6 +3,10 @@
 #define GLFW_INCLUDE_VULKAN // includes vulkan.h
 #include <GLFW/include/glfw3.h>
 
+#define GLM_FORCE_RADIANS
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+
 #include <stdexcept>
 #include <iostream>
 #include <vector>
@@ -12,13 +16,25 @@
 #include <limits>
 #include <algorithm>
 #include <fstream>
+#include <array>
+#include <chrono>
 
+//Graphics specific
+struct GlobalUBO
+{
+	alignas(16) glm::mat4 model;
+	alignas(16) glm::mat4 view;
+	alignas(16) glm::mat4 proj;
+};
+
+//Vulkan specific
 struct QueueFamilyIndices
 {
 	std::optional<uint32_t> graphicsFamily;
 	std::optional<uint32_t> presentFamily;
+	std::optional<uint32_t> transferFamily;
 
-	bool isComplete() { return graphicsFamily.has_value() && presentFamily.has_value(); }
+	bool isComplete() const { return transferFamily.has_value() && graphicsFamily.has_value() && presentFamily.has_value(); }
 };
 
 struct SwapChainSupportDetails
@@ -26,6 +42,16 @@ struct SwapChainSupportDetails
 	VkSurfaceCapabilitiesKHR capabilities;
 	std::vector<VkSurfaceFormatKHR> formats;
 	std::vector<VkPresentModeKHR> presentModes;
+};
+
+//Application specific
+struct Vertex
+{
+	glm::vec2 position;
+	glm::vec3 color;
+
+	static VkVertexInputBindingDescription getBindingDescription();
+	static std::array<VkVertexInputAttributeDescription, 2> getAttributeDescriptions();
 };
 
 class Application
@@ -65,11 +91,19 @@ private:
 	void createImageViews();
 	void createRenderPass();
 
+	void createDescriptorSetLayout();
+	void createDescriptorPool();
+	void createDescriptorSets();
+
 	void createGraphicsPipeline();
 	void createFramebuffers();
 	
-	void createCommandPool();
+	void createCommandPools();
 	void createCommandBuffers();
+	void createVertexBuffer();
+	void createIndexBuffer();
+	void createUniformBuffers();
+	void updateUniformBuffer(uint32_t currentImage);
 	void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 
 	void drawFrame();
@@ -103,7 +137,11 @@ private:
 		VkDebugUtilsMessengerEXT debugMessenger,
 		const VkAllocationCallbacks* pAllocator);
 
+	//helper functions
 	static std::vector<char> readFile(const std::string& filename);
+	uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
+	void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
+	void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
 private:
 	//window
 	GLFWwindow* m_window = nullptr;
@@ -132,14 +170,18 @@ private:
 	VkPhysicalDevice m_physicalDevice = VK_NULL_HANDLE;
 	VkDevice m_device;
 	
-	VkQueue m_graphicsQueue, m_presentQueue;
+	VkQueue m_graphicsQueue, m_presentQueue, m_transferQueue;
 
+	VkDescriptorSetLayout m_descriptorSetLayout;
+	VkDescriptorPool m_descriptorPool;
+	std::vector<VkDescriptorSet> m_descriptorSets;
+	
 	VkPipelineLayout m_pipelineLayout;
 	VkRenderPass m_renderPass;
 	VkPipeline m_graphicsPipeline;
 	std::vector<VkFramebuffer> m_swapChainFramebuffers;
 
-	VkCommandPool m_commandPool;
+	VkCommandPool m_commandPool, m_transferCommandPool; // TODO: add this one , m_temporaryOperationsCommandPool;
 	std::vector<VkCommandBuffer> m_commandBuffers;
 
 	//synchronization
@@ -156,4 +198,27 @@ private:
 	std::vector<VkImageView> m_swapChainImageViews;
 	const int MAX_FRAMES_IN_FLIGHT = 2;
 	uint32_t m_currentFrame = 0;
+
+	//vertex buffer
+	VkBuffer m_vertexBuffer;
+	VkDeviceMemory m_vertexBufferMemory;
+	VkBuffer m_indexBuffer;
+	VkDeviceMemory m_indexBufferMemory;
+
+	std::vector<VkBuffer> m_uniformBuffers;
+	std::vector<VkDeviceMemory> m_uniformBuffersMemory;
+	std::vector<void*> m_mappedUniformBuffersMemory;
+
+	const std::vector<Vertex> m_vertices =
+	{
+		{ {-0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}},
+		{ { 0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}},
+		{ { 0.5f,  0.5f}, {1.0f, 1.0f, 1.0f}},
+		{ {-0.5f,  0.5f}, {1.0f, 1.0f, 1.0f}}
+	};
+
+	const std::vector<uint32_t> m_indices = 
+	{
+		0, 1, 2, 2, 3, 0
+	};
 };
