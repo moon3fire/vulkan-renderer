@@ -4,9 +4,11 @@
 #include <GLFW/include/glfw3.h>
 
 #define GLM_FORCE_RADIANS
+#define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
+//std
 #include <stdexcept>
 #include <iostream>
 #include <vector>
@@ -27,6 +29,16 @@ struct GlobalUBO
 	alignas(16) glm::mat4 proj;
 };
 
+struct Vertex
+{
+	glm::vec3 position;
+	glm::vec3 color;
+	glm::vec2 texCoord;
+
+	static VkVertexInputBindingDescription getBindingDescription();
+	static std::array<VkVertexInputAttributeDescription, 3> getAttributeDescriptions();
+};
+
 //Vulkan specific
 struct QueueFamilyIndices
 {
@@ -42,16 +54,6 @@ struct SwapChainSupportDetails
 	VkSurfaceCapabilitiesKHR capabilities;
 	std::vector<VkSurfaceFormatKHR> formats;
 	std::vector<VkPresentModeKHR> presentModes;
-};
-
-//Application specific
-struct Vertex
-{
-	glm::vec2 position;
-	glm::vec3 color;
-
-	static VkVertexInputBindingDescription getBindingDescription();
-	static std::array<VkVertexInputAttributeDescription, 2> getAttributeDescriptions();
 };
 
 class Application
@@ -98,6 +100,12 @@ private:
 	void createGraphicsPipeline();
 	void createFramebuffers();
 	
+	void createTextureImage();
+	void createImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usageFlags,
+		VkMemoryPropertyFlags memoryPropertyFlags, VkImage& image, VkDeviceMemory& imageMemory);
+	void createTextureImageView();
+	void createTextureSampler();
+
 	void createCommandPools();
 	void createCommandBuffers();
 	void createVertexBuffer();
@@ -142,6 +150,19 @@ private:
 	uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
 	void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
 	void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
+
+	VkCommandBuffer beginSingleTimeCommands();
+	void endSingleTimeCommands(VkCommandBuffer commandBuffer);
+
+	void transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout);
+	void copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
+
+	VkImageView createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags); // TODO: move to common section
+
+	void createDepthResources();
+	VkFormat findDepthFormat();
+	bool hasStencilComponent(VkFormat format);
+	VkFormat findSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features);
 private:
 	//window
 	GLFWwindow* m_window = nullptr;
@@ -199,7 +220,7 @@ private:
 	const int MAX_FRAMES_IN_FLIGHT = 2;
 	uint32_t m_currentFrame = 0;
 
-	//vertex buffer
+	//rendering
 	VkBuffer m_vertexBuffer;
 	VkDeviceMemory m_vertexBufferMemory;
 	VkBuffer m_indexBuffer;
@@ -209,16 +230,32 @@ private:
 	std::vector<VkDeviceMemory> m_uniformBuffersMemory;
 	std::vector<void*> m_mappedUniformBuffersMemory;
 
+	VkImage m_textureImage; // lain pic
+	VkDeviceMemory m_textureImageMemory;
+	VkImageView m_textureImageView;
+	VkSampler m_textureSampler;
+
+	VkImage m_depthImage;
+	VkDeviceMemory m_depthImageMemory;
+	VkImageView m_depthImageView;
+
+
 	const std::vector<Vertex> m_vertices =
 	{
-		{ {-0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}},
-		{ { 0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}},
-		{ { 0.5f,  0.5f}, {1.0f, 1.0f, 1.0f}},
-		{ {-0.5f,  0.5f}, {1.0f, 1.0f, 1.0f}}
+		{ {-0.5f, -0.5f, 0.0f}, {0.1f, 0.9f, 0.2f},   {1.0f, 0.0f} },
+		{ { 0.5f, -0.5f, 0.0f}, {0.2f, 0.7f, 0.3f},   {0.0f, 0.0f} },
+		{ { 0.5f,  0.5f, 0.0f}, {0.32f, 0.8f, 0.21f}, {0.0f, 1.0f} },
+		{ {-0.5f,  0.5f, 0.0f}, {0.3f, 1.0f, 0.2f},   {1.0f, 1.0f} },
+
+		{ {-0.5f, -0.5f, -0.5f}, {0.1f, 0.9f, 0.2f},   {1.0f, 0.0f} },
+		{ { 0.5f, -0.5f, -0.5f}, {0.2f, 0.7f, 0.3f},   {0.0f, 0.0f} },
+		{ { 0.5f,  0.5f, -0.5f}, {0.32f, 0.8f, 0.21f}, {0.0f, 1.0f} },
+		{ {-0.5f,  0.5f, -0.5f}, {0.3f, 1.0f, 0.2f},   {1.0f, 1.0f} }
 	};
 
 	const std::vector<uint32_t> m_indices = 
 	{
-		0, 1, 2, 2, 3, 0
+		0, 1, 2, 2, 3, 0,
+		4, 5, 6, 6, 7, 4
 	};
 };
