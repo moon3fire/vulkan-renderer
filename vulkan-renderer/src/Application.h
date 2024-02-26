@@ -7,7 +7,7 @@
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
-
+#include <glm/gtx/hash.hpp>
 //std
 #include <stdexcept>
 #include <iostream>
@@ -20,6 +20,7 @@
 #include <fstream>
 #include <array>
 #include <chrono>
+#include <unordered_map>
 
 //Graphics specific
 struct GlobalUBO
@@ -37,7 +38,20 @@ struct Vertex
 
 	static VkVertexInputBindingDescription getBindingDescription();
 	static std::array<VkVertexInputAttributeDescription, 3> getAttributeDescriptions();
+
+	bool operator==(const Vertex& other) const
+	{
+		return position == other.position && color == other.color && texCoord == other.texCoord;
+	}
 };
+
+namespace std {
+	template<> struct hash<Vertex> {
+		size_t operator()(Vertex const& vertex) const {
+			return ((hash<glm::vec3>()(vertex.position) ^ (hash<glm::vec3>()(vertex.color) << 1)) >> 1) ^ (hash<glm::vec2>()(vertex.texCoord) << 1);
+		}
+	};
+}
 
 //Vulkan specific
 struct QueueFamilyIndices
@@ -101,13 +115,15 @@ private:
 	void createFramebuffers();
 	
 	void createTextureImage();
-	void createImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usageFlags,
+	void createImage(uint32_t width, uint32_t height, uint32_t mipLevels, VkSampleCountFlagBits numSamples, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usageFlags,
 		VkMemoryPropertyFlags memoryPropertyFlags, VkImage& image, VkDeviceMemory& imageMemory);
 	void createTextureImageView();
 	void createTextureSampler();
 
 	void createCommandPools();
 	void createCommandBuffers();
+
+	void loadModel();
 	void createVertexBuffer();
 	void createIndexBuffer();
 	void createUniformBuffers();
@@ -118,8 +134,13 @@ private:
 	//synchronization
 	void createSyncObjects();
 
+	void generateMipmaps(VkImage image, VkFormat format, uint32_t texWidth, uint32_t texHeight, uint32_t mipLevels);
+
+	void createColorResources();
+
 	VkShaderModule createShaderModule(const std::vector<char>& bytecode);
 
+	VkSampleCountFlagBits getMaxUsableSampleCount();
 
 	// this function is simply adding debug utils extension if debug mode is enabled
 	std::vector<const char*> getRequiredExtensions();
@@ -154,10 +175,10 @@ private:
 	VkCommandBuffer beginSingleTimeCommands();
 	void endSingleTimeCommands(VkCommandBuffer commandBuffer);
 
-	void transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout);
+	void transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout, uint32_t mipLevels);
 	void copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
 
-	VkImageView createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags); // TODO: move to common section
+	VkImageView createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t mipLevels);
 
 	void createDepthResources();
 	VkFormat findDepthFormat();
@@ -193,6 +214,7 @@ private:
 	
 	VkQueue m_graphicsQueue, m_presentQueue, m_transferQueue;
 
+
 	VkDescriptorSetLayout m_descriptorSetLayout;
 	VkDescriptorPool m_descriptorPool;
 	std::vector<VkDescriptorSet> m_descriptorSets;
@@ -221,6 +243,8 @@ private:
 	uint32_t m_currentFrame = 0;
 
 	//rendering
+	VkSampleCountFlagBits m_msaaSamples;
+
 	VkBuffer m_vertexBuffer;
 	VkDeviceMemory m_vertexBufferMemory;
 	VkBuffer m_indexBuffer;
@@ -230,7 +254,8 @@ private:
 	std::vector<VkDeviceMemory> m_uniformBuffersMemory;
 	std::vector<void*> m_mappedUniformBuffersMemory;
 
-	VkImage m_textureImage; // lain pic
+	uint32_t m_mipLevels;
+	VkImage m_textureImage;
 	VkDeviceMemory m_textureImageMemory;
 	VkImageView m_textureImageView;
 	VkSampler m_textureSampler;
@@ -239,7 +264,11 @@ private:
 	VkDeviceMemory m_depthImageMemory;
 	VkImageView m_depthImageView;
 
+	VkImage m_colorImage;
+	VkDeviceMemory m_colorImageMemory;
+	VkImageView m_colorImageView;
 
+	/*
 	const std::vector<Vertex> m_vertices =
 	{
 		{ {-0.5f, -0.5f, 0.0f}, {0.1f, 0.9f, 0.2f},   {1.0f, 0.0f} },
@@ -258,4 +287,11 @@ private:
 		0, 1, 2, 2, 3, 0,
 		4, 5, 6, 6, 7, 4
 	};
+	*/ // Saved for future reference
+
+	std::vector<Vertex> m_vertices;
+	std::vector<uint32_t> m_indices;
+	
+	const std::string m_modelPath = "textures/obj/viking_room.obj";
+	const std::string m_modelTexturePath = "textures/lain.jpg";
 };
