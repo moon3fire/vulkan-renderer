@@ -26,7 +26,6 @@ void Application::initWindow()
 	glfwInit();
 
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-	//glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 	glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
 
 	m_window = glfwCreateWindow(m_width, m_height, "Vulkan Renderer", nullptr, nullptr);
@@ -258,7 +257,7 @@ void Application::pickPhysicalDevice()
 void Application::createLogicalDevice()
 {
 	QueueFamilyIndices indices = findQueueFamilies(m_physicalDevice);
-	
+
 	std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
 	std::set<uint32_t> uniqueQueueFamilies = { indices.graphicsFamily.value(), indices.presentFamily.value(), indices.transferFamily.value() };
 
@@ -304,6 +303,10 @@ void Application::createLogicalDevice()
 	vkGetDeviceQueue(m_device, indices.graphicsFamily.value(), 0, &m_graphicsQueue);
 	vkGetDeviceQueue(m_device, indices.presentFamily.value(), 0, &m_presentQueue);
 	vkGetDeviceQueue(m_device, indices.transferFamily.value(), 0, &m_transferQueue);
+
+	//std::cout << std::endl << "Graphics family: " << indices.graphicsFamily.value_or(-10000) << std::endl;
+	//std::cout << std::endl << "Present family: " << indices.presentFamily.value_or(-10000) << std::endl;
+	//std::cout << std::endl << "Transfer family: " << indices.transferFamily.value_or(-10000) << std::endl;
 }
 
 bool Application::isDeviceSuitable(VkPhysicalDevice device)
@@ -327,7 +330,8 @@ bool Application::isDeviceSuitable(VkPhysicalDevice device)
 	}
 
 	return indices.isComplete() && extensionsSupported && swapChainAdequate &&
-		 deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU &&
+		 (deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU ||
+		 deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU) &&
 		 deviceFeatures.samplerAnisotropy; // checking if enabled(modern GPUs should support it)
 }
 
@@ -427,8 +431,8 @@ void Application::createSwapChain()
 	VkSurfaceFormatKHR surfaceFormat = chooseSwapChainFormat(swapChainSupport.formats);
 	VkPresentModeKHR presentMode = chooseSwapPresentMode(swapChainSupport.presentModes);
 	VkExtent2D extent = chooseSwapExtent(swapChainSupport.capabilities);
-
-	uint32_t imageCount = swapChainSupport.capabilities.minImageCount ; // Should be equal to MAX_FRAMES_IN_FLIGHT, maybe +1? TODO:
+	
+	uint32_t imageCount = swapChainSupport.capabilities.minImageCount; // Should be equal to MAX_FRAMES_IN_FLIGHT, maybe +1? TODO:
 	//std::cout << "Min image count: " << imageCount << std::endl;
 	//std::cout << "Max image count: " << swapChainSupport.capabilities.maxImageCount << std::endl;
 	if (swapChainSupport.capabilities.maxImageCount > 0 && imageCount > swapChainSupport.capabilities.maxImageCount)
@@ -1474,7 +1478,6 @@ void Application::framebufferResizeCallback(GLFWwindow* window, int width, int h
 {
 	auto app = reinterpret_cast<Application*>(glfwGetWindowUserPointer(window));
 	app->m_framebufferResized = true;
-
 }
 
 VKAPI_ATTR VkBool32 VKAPI_CALL Application::debugCallback(
@@ -1566,7 +1569,7 @@ void Application::createTextureSampler()
 	samplerCreateInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR; // mipmap mode
 	samplerCreateInfo.mipLodBias = 0.0f; // mipmap level of detail bias
 	samplerCreateInfo.minLod = 0.0f; // minimum mipmap level of detail to pick
-	//samplerCreateInfo.minLod = static_cast<float>(m_mipLevels / 2);
+	//samplerCreateInfo.minLod = static_cast<float>(m_mipLevels);
 	samplerCreateInfo.maxLod = static_cast<float>(m_mipLevels); // maximum mipmap level of detail to pick
 
 	if (vkCreateSampler(m_device, &samplerCreateInfo, nullptr, &m_textureSampler) != VK_SUCCESS)
